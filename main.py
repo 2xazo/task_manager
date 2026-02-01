@@ -5,7 +5,9 @@ FastAPI application entry point.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+import os
 
 from routers import tasks, users
 from database import init_database, validate_database_connection
@@ -14,8 +16,6 @@ app = FastAPI(
     title="Task Management API",
     description="Modular REST API for managing users and tasks",
     version="1.0.0",
-    docs_url=None,  # Disable default - we serve custom /docs below (unpkg CDN)
-    redoc_url="/redoc",
 )
 
 # CORS - allows browsers to load docs and call API from any origin
@@ -27,21 +27,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/docs", include_in_schema=False)
-def swagger_ui():
-    """Swagger UI using unpkg CDN (works when jsdelivr is blocked)."""
-    return get_swagger_ui_html(
-        openapi_url="/openapi.json",
-        title=f"{app.title} - Swagger UI",
-        swagger_js_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js",
-        swagger_css_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css",
-        swagger_ui_parameters={"syntaxHighlight.theme": "monokai", "tryItOutEnabled": True},
-    )
-
 # Include routers
 app.include_router(users.router)
 app.include_router(tasks.router)
+
+# Serve static files (HTML, CSS, JS)
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.on_event("startup")
@@ -53,10 +45,14 @@ def startup_event():
     print(f"Message: {db_status['message']}")
 
 
-@app.get("/")
-def root() -> dict[str, str]:
-    """Root endpoint - API welcome message."""
-    return {"message": "Welcome to the Task API"}
+@app.get("/", tags=["root"], include_in_schema=False)
+def root():
+    """Root endpoint - returns HTML file."""
+    try:
+        with open("static/index.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return {"message": "Welcome to the Task API"}
 
 
 @app.get("/health", tags=["health"])
