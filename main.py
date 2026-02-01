@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 
 from routers import tasks, users
+from database import init_database, validate_database_connection
 
 app = FastAPI(
     title="Task Management API",
@@ -43,7 +44,26 @@ app.include_router(users.router)
 app.include_router(tasks.router)
 
 
+@app.on_event("startup")
+def startup_event():
+    """Initialize database on startup."""
+    init_database()
+    db_status = validate_database_connection()
+    print(f"Database Status: {db_status['status']}")
+    print(f"Message: {db_status['message']}")
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     """Root endpoint - API welcome message."""
     return {"message": "Welcome to the Task API"}
+
+
+@app.get("/health", tags=["health"])
+def health_check() -> dict:
+    """Health check endpoint with database validation."""
+    db_status = validate_database_connection()
+    return {
+        "status": "healthy",
+        "database": db_status
+    }
